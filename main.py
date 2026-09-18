@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Body, HTTPException, status, Header
+from fastapi import FastAPI, Body, HTTPException, status, Header, Depends
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -10,6 +10,33 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # initialise supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Access token required"}
+        )
+
+    token = authorization.split(" ")[1]
+
+    try:
+        response = supabase.auth.get_user(token)
+        user = response.user
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "Invalid or expired token"}
+            )
+
+        return user
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Invalid or expired token"}
+        )
 
 app = FastAPI()
 
@@ -67,34 +94,26 @@ def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
 @app.get("/protected/profile", status_code=status.HTTP_200_OK)
-def protected_profile(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code = status.HTTP_401_UNAUTHORIZED,
-            detail = {"error": "Access token required"}
-        )
+def protected_profile(user = Depends(get_current_user)):
+    return {
+        "message": "Access granted",
+        "id": user.id,
+        "email": user.email,
+        "account_created": user.created_at,
+    }
 
-    token = authorization.split(" ")[1]
-
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(user = Depends(get_current_user)):
     try:
-        response = supabase.auth.get_user(token)
-        user = response.user
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"error": "Invalid or expired token"}
-            )
-
-        return {
-                "message": "Access granted",
-                "id": user.id,
-                "email": user.email,
-                "account_created": user.created_at,
-                }
-
+        response = supabase.auth.sign_out()
+        return {"message": "User logged out successfully."}
+    
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "Invalid or expired token"}
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": str(e)}
         )
+
+@app.get("/protected/dashboard", status_code=status.HTTP_200_OK)
+def protected_dashboard(user = Depends(get_current_user)):
+    return {"message": "Access granted to dashboard"}
