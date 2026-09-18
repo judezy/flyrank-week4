@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, Body, HTTPException, status, Header, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -11,14 +12,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 # initialise supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_current_user(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "Access token required"}
-        )
+security = HTTPBearer()
 
-    token = authorization.split(" ")[1]
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
 
     try:
         response = supabase.auth.get_user(token)
@@ -37,7 +34,7 @@ def get_current_user(authorization: str = Header(None)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "Invalid or expired token"}
         )
-
+    
 app = FastAPI()
 
 @app.get("/")
