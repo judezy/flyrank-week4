@@ -66,7 +66,7 @@ def login(payload: dict = Body(...)):
 def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
-@app.get("/protected/profile")
+@app.get("/protected/profile", status_code=status.HTTP_200_OK)
 def protected_profile(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -76,5 +76,25 @@ def protected_profile(authorization: str = Header(None)):
 
     token = authorization.split(" ")[1]
 
-    return {"message": "Access granted"}
+    try:
+        response = supabase.auth.get_user(token)
+        user = response.user
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "Invalid or expired token"}
+            )
 
+        return {
+                "message": "Access granted",
+                "id": user.id,
+                "email": user.email,
+                "account_created": user.created_at,
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Invalid or expired token"}
+        )
