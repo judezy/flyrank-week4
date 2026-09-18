@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Body, HTTPException, status
+from fastapi import FastAPI, Body, HTTPException, status, Header
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -61,3 +61,20 @@ def login(payload: dict = Body(...)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "Invalid login credentials."}
         )
+
+@app.get("/public/info", status_code=status.HTTP_200_OK)
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+@app.get("/protected/profile")
+def protected_profile(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = {"error": "Access token required"}
+        )
+
+    token = authorization.split(" ")[1]
+
+    return {"message": "Access granted"}
+
